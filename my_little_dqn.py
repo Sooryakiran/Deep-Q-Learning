@@ -17,9 +17,9 @@ LEARNING_RATE = 1e-4
 DQN_TARGET_SYNC = 5000
 BATCH_SIZE = 4096
 GAMMA = 0.99
-INITIAL_EPSILON = 0.7
+INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.02
-EPSILON_DECAY_FRAMES = 10e3
+EPSILON_DECAY_FRAMES = 10e4
 SOLVED_POINTS = 200
 OBSERVATION_SHAPE = 8
 ACTION_SPACE = 3
@@ -79,11 +79,15 @@ class DQNagent:
                                                 name = "train_placeholder_next_state")
             self.tf_rewards = tf.placeholder(dtype=tf.float32, shape = [self.batch_size, 1], \
                                             name = "train_placeholder_rewards")
+            self.current_action = tf.placeholder(dtype = tf.int32)
+        
+            action_one_hot = tf.one_hot(self.current_action, depth = self.action_space)
 
             # train ops
             self.predicted_q_values = self.network(self.tf_observation_train, "dqn")
             self.next_state_q_values = tf.stop_gradient(self.network(self.tf_next_state,"target"))
-            self.real_q_values = tf.reduce_max(self.next_state_q_values) * self.gamma + self.tf_rewards
+            
+            self.real_q_values = tf.reduce_max((self.next_state_q_values)*action_one_hot) * self.gamma + self.tf_rewards
             self.real_q_values = tf.reshape(self.real_q_values,shape= (-1,))
             self.predicted_required = tf.reduce_max(self.predicted_q_values, reduction_indices=[1])
             self.loss = tf.reduce_mean(tf.losses.huber_loss(labels = self.real_q_values, predictions = self.predicted_required) )
@@ -213,7 +217,10 @@ class DQNagent:
                     batch_states, batch_actions, batch_rewards, batch_dones, batch_next_states = observation_batch
                     batch_rewards = np.reshape(batch_rewards, (-1,1))
       
-                    feed_dict = {self.tf_observation_train: batch_states, self.tf_next_state: batch_next_states, self.tf_rewards: batch_rewards}
+                    feed_dict = {self.tf_observation_train: batch_states, \
+                                 self.tf_next_state: batch_next_states, \
+                                 self.tf_rewards: batch_rewards, \
+                                 self.current_action: batch_actions}
 
                     for i in range(1):
                         loss_, train_operation_ = sess.run([self.loss,self.train_operation],feed_dict = feed_dict)
